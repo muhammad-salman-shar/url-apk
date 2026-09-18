@@ -112,7 +112,7 @@ fun MainScreen(
 
     // React to desktop mode / zoom changes
     LaunchedEffect(state.isDesktopMode) {
-        webView?.let { WebViewManager.applyDesktopMode(it, state.isDesktopMode) }
+        webView?.let { WebViewManager.applyDesktopMode(context, it, state.isDesktopMode) }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {

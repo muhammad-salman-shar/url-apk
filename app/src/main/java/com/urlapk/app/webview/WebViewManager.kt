@@ -72,24 +72,22 @@ object WebViewManager {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
     }
 
-    fun applyDesktopMode(webView: WebView, enabled: Boolean) {
+    /**
+     * Toggles between desktop and mobile UA and reloads the page.
+     * When switching back to mobile we use the system default UA
+     * (via WebSettings.getDefaultUserAgent) so the site sees a real
+     * mobile browser fingerprint.
+     */
+    fun applyDesktopMode(context: Context, webView: WebView, enabled: Boolean) {
         webView.settings.userAgentString = if (enabled) {
             Constants.DESKTOP_UA
         } else {
-            // Get system default UA by instantiating a fresh WebView once
-            defaultMobileUserAgent ?: Constants.DESKTOP_UA
+            runCatching { WebSettings.getDefaultUserAgent(context) }
+                .getOrElse { Constants.DESKTOP_UA }
         }
         webView.settings.useWideViewPort = true
         webView.settings.loadWithOverviewMode = true
         webView.reload()
-    }
-
-    private val defaultMobileUserAgent: String? by lazy {
-        try {
-            WebView.getDefaultUserAgent(null)
-        } catch (t: Throwable) {
-            null
-        }
     }
 
     fun applyZoom(webView: WebView, zoomPercent: Int) {
