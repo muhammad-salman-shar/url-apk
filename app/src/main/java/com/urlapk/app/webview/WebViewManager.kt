@@ -1,7 +1,6 @@
 package com.urlapk.app.webview
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
 import android.os.Build
 import android.view.ViewGroup
@@ -19,22 +18,19 @@ import com.urlapk.app.util.Constants
  */
 object WebViewManager {
 
-    private val MOBILE_UA: String? = null // null = use system default (real mobile UA)
-
     @SuppressLint("SetJavaScriptEnabled")
     fun buildConfiguredWebView(context: Context): WebView {
-        return WebView(context).apply {
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            settings.applySettings()
-            configureCookies()
-            isVerticalScrollBarEnabled = true
-            isHorizontalScrollBarEnabled = false
-            overScrollMode = WebView.OVER_SCROLL_IF_CONTENT_SCROLLS
-            setBackgroundColor(android.graphics.Color.WHITE)
-        }
+        val webView = WebView(context)
+        webView.layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        webView.settings.applySettings()
+        webView.isVerticalScrollBarEnabled = true
+        webView.isHorizontalScrollBarEnabled = false
+        webView.overScrollMode = WebView.OVER_SCROLL_IF_CONTENT_SCROLLS
+        webView.setBackgroundColor(android.graphics.Color.WHITE)
+        return webView
     }
 
     private fun WebSettings.applySettings() {
@@ -43,7 +39,6 @@ object WebViewManager {
         databaseEnabled = true
         loadsImagesAutomatically = true
 
-        // Viewport / scaling — keep site looking native
         useWideViewPort = true
         loadWithOverviewMode = true
         setSupportZoom(true)
@@ -51,43 +46,29 @@ object WebViewManager {
         displayZoomControls = false
         textZoom = 100
 
-        // File access (needed for file input & blob)
         allowFileAccess = true
         allowContentAccess = true
 
-        // Security — no file:// cross access
         @Suppress("DEPRECATION")
         allowFileAccessFromFileURLs = false
         @Suppress("DEPRECATION")
         allowUniversalAccessFromFileURLs = false
 
-        // Media
         mediaPlaybackRequiresUserGesture = false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             safeBrowsingEnabled = true
         }
 
-        // Mixed content — block insecure resources on HTTPS pages
         mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-
-        // Cache
         cacheMode = WebSettings.LOAD_DEFAULT
-
-        // Geolocation — let page request; permission handled by app
         setGeolocationEnabled(false)
 
-        // User agent (mobile default)
-        userAgentString = MOBILE_UA
-    }
-
-    private fun configureCookies() {
-        CookieManager.getInstance().apply {
-            setAcceptCookie(true)
-            setAcceptThirdPartyCookies(null, true) // ignored if no WebView; safe
-        }
+        // NOTE: do NOT set userAgentString to null — some OEM WebViews crash.
+        // Leaving it unset = system default mobile UA (what we want).
     }
 
     fun applyCookiePolicy(webView: WebView) {
+        CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
     }
 
@@ -95,17 +76,24 @@ object WebViewManager {
         webView.settings.userAgentString = if (enabled) {
             Constants.DESKTOP_UA
         } else {
-            MOBILE_UA
+            // Get system default UA by instantiating a fresh WebView once
+            defaultMobileUserAgent ?: Constants.DESKTOP_UA
         }
         webView.settings.useWideViewPort = true
         webView.settings.loadWithOverviewMode = true
-        // Force a reload so the server serves the correct variant
         webView.reload()
+    }
+
+    private val defaultMobileUserAgent: String? by lazy {
+        try {
+            WebView.getDefaultUserAgent(null)
+        } catch (t: Throwable) {
+            null
+        }
     }
 
     fun applyZoom(webView: WebView, zoomPercent: Int) {
         val clamped = zoomPercent.coerceIn(Constants.MIN_ZOOM, Constants.MAX_ZOOM)
-        // WebView textZoom only affects text; use setInitialScale for a page-wide zoom.
         webView.setInitialScale(clamped)
     }
 
