@@ -17,23 +17,40 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DesktopWindows
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +68,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -62,6 +81,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.urlapk.app.R
+import com.urlapk.app.util.UrlValidator
 import com.urlapk.app.webview.UrlWebChromeClient
 import com.urlapk.app.webview.UrlWebViewClient
 import com.urlapk.app.webview.WebViewDownloader
@@ -75,6 +95,12 @@ data class LongPressTarget(
     val suggestedName: String
 )
 
+data class HistoryEntry(
+    val title: String,
+    val url: String,
+    val isCurrent: Boolean
+)
+
 @Composable
 fun MainScreen(
     viewModel: MainViewModel = viewModel()
@@ -86,6 +112,8 @@ fun MainScreen(
 
     var webView by remember { mutableStateOf<WebView?>(null) }
     var longPressTarget by remember { mutableStateOf<LongPressTarget?>(null) }
+    var showHistory by remember { mutableStateOf(false) }
+    var historyEntries by remember { mutableStateOf<List<HistoryEntry>>(emptyList()) }
 
     val downloader = remember {
         WebViewDownloader(
@@ -175,8 +203,39 @@ fun MainScreen(
         )
 
         FloatingControl(
+            currentUrl = state.currentUrl,
+            canBack = state.canGoBack,
+            canForward = state.canGoForward,
             isDesktop = state.isDesktopMode,
-            onToggleDesktop = { viewModel.toggleDesktopMode() }
+            onNavigate = { raw ->
+                val normalized = UrlValidator.normalize(raw)
+                if (normalized != null) {
+                    webView?.loadUrl(normalized)
+                    true
+                } else {
+                    Toast.makeText(context, "Invalid URL", Toast.LENGTH_SHORT).show()
+                    false
+                }
+            },
+            onBack = { webView?.goBack() },
+            onForward = { webView?.goForward() },
+            onReload = { webView?.reload() },
+            onToggleDesktop = { viewModel.toggleDesktopMode() },
+            onOpenHistory = {
+                val wv = webView
+                if (wv != null) {
+                    val list = wv.copyBackForwardList()
+                    historyEntries = (0 until list.size).map { i ->
+                        val item = list.getItemAtIndex(i)
+                        HistoryEntry(
+                            title = item.title ?: item.url.orEmpty(),
+                            url = item.url.orEmpty(),
+                            isCurrent = i == list.currentIndex
+                        )
+                    }.reversed()
+                    showHistory = true
+                }
+            }
         )
     }
 
@@ -196,6 +255,17 @@ fun MainScreen(
             onDismiss = { longPressTarget = null }
         )
     }
+
+    if (showHistory) {
+        HistoryDialog(
+            entries = historyEntries,
+            onSelect = { url ->
+                webView?.loadUrl(url)
+                showHistory = false
+            },
+            onDismiss = { showHistory = false }
+        )
+    }
 }
 
 @Composable
@@ -205,7 +275,7 @@ private fun LongPressDialog(
     onCopyLink: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Image options") },
         text = {
@@ -216,34 +286,90 @@ private fun LongPressDialog(
                 overflow = TextOverflow.Ellipsis
             )
         },
-        confirmButton = {
-            TextButton(onClick = onDownload) { Text("Download") }
-        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onDownload) { Text("Download") } },
         dismissButton = {
             Row {
-                TextButton(onClick = onCopyLink) { Text("Copy link") }
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                androidx.compose.material3.TextButton(onClick = onCopyLink) { Text("Copy link") }
+                androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
             }
         }
     )
 }
 
 @Composable
+private fun HistoryDialog(
+    entries: List<HistoryEntry>,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("History") },
+        text = {
+            if (entries.isEmpty()) {
+                Text("No history yet")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(entries) { entry ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onSelect(entry.url) }
+                                .padding(horizontal = 6.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (entry.isCurrent) "▶ ${entry.title}" else entry.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = entry.url,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@Composable
 private fun FloatingControl(
+    currentUrl: String,
+    canBack: Boolean,
+    canForward: Boolean,
     isDesktop: Boolean,
-    onToggleDesktop: () -> Unit
+    onNavigate: (String) -> Boolean,
+    onBack: () -> Unit,
+    onForward: () -> Unit,
+    onReload: () -> Unit,
+    onToggleDesktop: () -> Unit,
+    onOpenHistory: () -> Unit
 ) {
     val density = LocalDensity.current
     val marginPx = with(density) { 12.dp.toPx() }
     val buttonPx = with(density) { 22.dp.toPx() }
     val iconSize = 14.dp
+    val cardWidth = 300.dp
 
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var expanded by remember { mutableStateOf(false) }
     var position by remember { mutableStateOf<Offset?>(null) }
+    var urlField by remember(currentUrl) { mutableStateOf(currentUrl) }
 
-    val pillWidthPx: Float = buttonPx * (if (expanded) 2f else 1f)
-    val pillHeightPx: Float = buttonPx
+    val pillWidthPx: Float = buttonPx
 
     LaunchedEffect(containerSize) {
         if (containerSize.width > 0 && position == null) {
@@ -267,13 +393,13 @@ private fun FloatingControl(
                 .height(22.dp)
                 .clip(RoundedCornerShape(11.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
-                .pointerInput(containerSize, expanded) {
+                .pointerInput(containerSize) {
                     detectDragGestures(
                         onDrag = { change, drag ->
                             change.consume()
                             val p = position ?: Offset(0f, 0f)
                             val maxX = (containerSize.width - pillWidthPx).coerceAtLeast(0f)
-                            val maxY = (containerSize.height - pillHeightPx).coerceAtLeast(0f)
+                            val maxY = (containerSize.height - buttonPx).coerceAtLeast(0f)
                             position = Offset(
                                 x = (p.x + drag.x).coerceIn(0f, maxX),
                                 y = (p.y + drag.y).coerceIn(0f, maxY)
@@ -287,24 +413,7 @@ private fun FloatingControl(
                 modifier = Modifier
                     .size(22.dp)
                     .clickable {
-                        val p = position ?: Offset(0f, 0f)
-                        position = if (!expanded) {
-                            Offset(
-                                x = (p.x - buttonPx).coerceIn(
-                                    0f,
-                                    (containerSize.width - pillWidthPx * 2f).coerceAtLeast(0f)
-                                ),
-                                y = p.y
-                            )
-                        } else {
-                            Offset(
-                                x = (p.x + buttonPx).coerceIn(
-                                    0f,
-                                    (containerSize.width - buttonPx).coerceAtLeast(0f)
-                                ),
-                                y = p.y
-                            )
-                        }
+                        urlField = currentUrl
                         expanded = !expanded
                     },
                 contentAlignment = Alignment.Center
@@ -312,26 +421,84 @@ private fun FloatingControl(
                 Icon(
                     imageVector = if (expanded) Icons.Filled.ChevronRight
                     else Icons.Filled.ChevronLeft,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = if (expanded) "Close controls" else "Open controls",
                     tint = Color.White,
                     modifier = Modifier.size(iconSize)
                 )
             }
+        }
 
-            if (expanded) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clickable { onToggleDesktop() },
-                    contentAlignment = Alignment.Center
+        if (expanded) {
+            val onRightHalf = pos.x > containerSize.width / 2f
+            val onBottomHalf = pos.y > containerSize.height / 2f
+            val cardWidthPx = with(density) { cardWidth.toPx() }
+
+            val cardX = if (onRightHalf) {
+                (pos.x - cardWidthPx + buttonPx).coerceIn(
+                    0f,
+                    (containerSize.width - cardWidthPx).coerceAtLeast(0f)
+                )
+            } else {
+                pos.x.coerceIn(0f, (containerSize.width - cardWidthPx).coerceAtLeast(0f))
+            }
+            val cardY = if (onBottomHalf) {
+                (pos.y - with(density) { 190.dp.toPx() }).coerceAtLeast(marginPx)
+            } else {
+                (pos.y + buttonPx + marginPx)
+            }
+
+            Card(
+                modifier = Modifier
+                    .offset { IntOffset(cardX.roundToInt(), cardY.roundToInt()) }
+                    .width(cardWidth),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = if (isDesktop) Icons.Filled.PhoneAndroid
-                        else Icons.Filled.DesktopWindows,
-                        contentDescription = if (isDesktop) "Switch to mobile" else "Switch to desktop",
-                        tint = Color.White,
-                        modifier = Modifier.size(iconSize)
+                    OutlinedTextField(
+                        value = urlField,
+                        onValueChange = { urlField = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("https://…") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Go
+                        ),
+                        keyboardActions = KeyboardActions(onGo = {
+                            if (onNavigate(urlField)) expanded = false
+                        })
                     )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onBack, enabled = canBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                        IconButton(onClick = onForward, enabled = canForward) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Forward")
+                        }
+                        IconButton(onClick = onReload) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Reload")
+                        }
+                        IconButton(onClick = onOpenHistory) {
+                            Icon(Icons.Filled.History, contentDescription = "History")
+                        }
+                        IconButton(onClick = onToggleDesktop) {
+                            Icon(
+                                imageVector = if (isDesktop) Icons.Filled.PhoneAndroid
+                                else Icons.Filled.DesktopWindows,
+                                contentDescription = if (isDesktop) "Mobile site" else "Desktop site"
+                            )
+                        }
+                    }
                 }
             }
         }
