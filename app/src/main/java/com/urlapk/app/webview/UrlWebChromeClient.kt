@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Message
 import android.view.View
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
@@ -13,14 +14,13 @@ import androidx.core.content.ContextCompat
 
 /**
  * Bridges WebView's native feature requests (camera, mic, file upload,
- * fullscreen video, progress) into the Compose/Activity layer.
+ * fullscreen video, progress, popup windows) into the Compose/Activity layer.
  *
- * Permission strategy:
- *  - If the Android runtime permission is already granted, WebView's
- *    request is auto-granted (seamless UX for sites like WhatsApp Web,
- *    Google Meet, etc.).
- *  - Otherwise the request is denied — the user must first grant the
- *    permission via the top bar's permission button (or app settings).
+ * Popup strategy: window.open() popups are BLOCKED. Sites like savefrom.net
+ * fire their ad in a popup while the real download runs in the background.
+ * Blocking the popup keeps the user on the original page and lets the
+ * DownloadListener fire normally. This matches Chrome's built-in popup
+ * blocker behaviour for the most common ad pattern.
  */
 class UrlWebChromeClient(
     private val activity: Activity,
@@ -76,5 +76,20 @@ class UrlWebChromeClient(
 
     override fun onHideCustomView() {
         onFullscreenViewRequested(null, null)
+    }
+
+    /**
+     * Popup blocker. Returning true means "we handled the new window", but
+     * since we never create a WebView, the popup is silently dropped and
+     * the current page stays intact. The user's download trigger remains
+     * in place, and any real file download continues via DownloadListener.
+     */
+    override fun onCreateWindow(
+        view: WebView,
+        isDialog: Boolean,
+        isUserGesture: Boolean,
+        resultMsg: Message
+    ): Boolean {
+        return true
     }
 }
