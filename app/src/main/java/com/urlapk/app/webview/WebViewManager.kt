@@ -19,7 +19,7 @@ import com.urlapk.app.util.Constants
  */
 object WebViewManager {
 
-    private const val MOBILE_UA: String? = null // null = use system default (real mobile UA)
+    private val MOBILE_UA: String? = null // null = use system default (real mobile UA)
 
     @SuppressLint("SetJavaScriptEnabled")
     fun buildConfiguredWebView(context: Context): WebView {
