@@ -1,6 +1,7 @@
 package com.urlapk.app
 
 import android.os.Bundle
+import android.webkit.CookieManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,5 +25,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Persist cookies to disk so login sessions survive app close.
+        // flush() performs I/O, so run it off the UI thread.
+        Thread { CookieManager.getInstance().flush() }.start()
     }
 }
