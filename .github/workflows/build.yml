@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Debug + Release APK
+    name: Build Debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -31,29 +31,14 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew || true
-
-      - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
-
-      - name: Build Release APK (unsigned)
-        run: gradle assembleRelease --no-daemon --stacktrace
-        continue-on-error: true
+      - name: Build Debug APK (verbose errors)
+        run: gradle assembleDebug --no-daemon --stacktrace --info --console=plain
 
       - name: Upload Debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: url-apk-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload Release APK (if built)
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: url-apk-release-unsigned
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: ignore
           retention-days: 30
