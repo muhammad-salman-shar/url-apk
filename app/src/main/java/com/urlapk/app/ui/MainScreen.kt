@@ -61,7 +61,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.urlapk.app.util.Constants
+import com.urlapk.app.R
 import com.urlapk.app.webview.UrlWebChromeClient
 import com.urlapk.app.webview.UrlWebViewClient
 import com.urlapk.app.webview.WebViewDownloader
@@ -130,7 +130,7 @@ fun MainScreen(
     }
 
     LaunchedEffect(webView) {
-        webView?.loadUrl(Constants.DEFAULT_HOME_URL)
+        webView?.loadUrl(context.getString(R.string.home_url))
     }
 
     LaunchedEffect(state.isDesktopMode) {

@@ -1,5 +1,12 @@
 package com.urlapk.app.util
 
+/**
+ * NOTE: The real HOME URL lives in res/values/strings.xml as
+ * <string name="home_url">...</string>. Change it there.
+ *
+ * This constant is only a code-side fallback used by the ViewModel
+ * before any Context is available. Keep it in sync with strings.xml.
+ */
 object Constants {
     const val DEFAULT_HOME_URL = "https://chat.z.ai"
     const val DESKTOP_UA =

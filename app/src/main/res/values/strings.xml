@@ -25,4 +25,8 @@
     <string name="copied">URL copied</string>
     <string name="share">Share</string>
     <string name="open_in_app">Open in app</string>
+    <!-- ============================================== -->
+    <!--  HOME URL - change this to open a different site -->
+    <!-- ============================================== -->
+    <string name="home_url" translatable="false">https://chat.z.ai</string>
 </resources>
