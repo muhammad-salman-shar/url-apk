@@ -9,20 +9,18 @@ import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.URLUtil
 import android.webkit.WebView
-import android.widget.Toast
 import com.urlapk.app.util.FileUtils
 
 /**
- * Handles two kinds of downloads from WebView:
- *  1. Standard HTTP(S) downloads  -> DownloadManager (system UI, resumable)
- *  2. Blob / data: URLs           -> injected JS reads bytes -> Base64 -> save
- *
- * Blob handling requires a JS bridge; we expose [JsBlobBridge] to the page
- * only when a download is triggered, then remove it after completion.
+ * Handles downloads from WebView:
+ *  1. HTTP(S) downloads     -> DownloadManager (system UI, resumable)
+ *  2. Blob / data: URLs     -> JS reads bytes -> Base64 -> save
+ *  3. Long-press on image   -> hit-test -> offer to download the image
  */
 class WebViewDownloader(
     private val context: Context,
-    private val onToast: (String) -> Unit
+    private val onToast: (String) -> Unit,
+    private val onLongPressMedia: (url: String, mimeType: String?, suggestedName: String) -> Unit
 ) : DownloadListener {
 
     override fun onDownloadStart(
@@ -35,12 +33,8 @@ class WebViewDownloader(
         if (url.isNullOrBlank()) return
 
         when {
-            url.startsWith("blob:") || url.startsWith("data:") -> {
-                triggerBlobDownload(url, mimetype)
-            }
-            else -> {
-                enqueueHttpDownload(url, userAgent, contentDisposition, mimetype)
-            }
+            url.startsWith("blob:") || url.startsWith("data:") -> triggerBlobDownload(url, mimetype)
+            else -> enqueueHttpDownload(url, userAgent, contentDisposition, mimetype)
         }
     }
 
@@ -71,10 +65,11 @@ class WebViewDownloader(
         }
     }
 
-    /**
-     * Blob URLs cannot be fetched by DownloadManager. We ask JS to read the
-     * blob into a Base64 string and hand it back via a one-shot bridge.
-     */
+    /** Public so MainScreen can trigger a download for a URL found via hit-test. */
+    fun downloadUrl(url: String) {
+        enqueueHttpDownload(url, null, null, null)
+    }
+
     private fun triggerBlobDownload(blobUrl: String, mimeType: String?) {
         val webView = currentWebView ?: return
         val resolvedMime = mimeType ?: "application/octet-stream"
@@ -105,7 +100,7 @@ class WebViewDownloader(
 
     private var currentWebView: WebView? = null
 
-    /** Attach the downloader to a WebView and expose the blob bridge. */
+    /** Attach the downloader to a WebView, expose blob bridge, and enable long-press. */
     fun attach(webView: WebView) {
         currentWebView = webView
         webView.setDownloadListener(this)
@@ -113,6 +108,40 @@ class WebViewDownloader(
             JsBlobBridge { base64, mime -> handleBlobBytes(base64, mime) },
             JS_BRIDGE_NAME
         )
+        attachLongPressHandler(webView)
+    }
+
+    /**
+     * Long-press anywhere -> inspect hitTestResult.
+     * If it's an image, image-anchor, or video src, notify the host so it can
+     * show a "Download" dialog. Returns false so the default WebView menu
+     * (text selection etc.) still works for non-media hits.
+     */
+    private fun attachLongPressHandler(webView: WebView) {
+        webView.isLongClickable = true
+        webView.setOnLongClickListener {
+            val result = webView.hitTestResult
+            val type = result.type
+            val extra = result.extra
+
+            val (isMedia, mime) = when (type) {
+                WebView.HitTestResult.IMAGE_TYPE -> true to null
+                WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> true to null
+                WebView.HitTestResult.SRC_ANCHOR_TYPE -> true to null
+                else -> false to null
+            }
+
+            if (isMedia && !extra.isNullOrBlank() &&
+                (extra.startsWith("http://") || extra.startsWith("https://") ||
+                 extra.startsWith("data:") || extra.startsWith("blob:"))
+            ) {
+                val name = URLUtil.guessFileName(extra, null, mime)
+                onLongPressMedia(extra, mime, name)
+                true
+            } else {
+                false
+            }
+        }
     }
 
     private fun handleBlobBytes(base64: String, mimeType: String?) {
@@ -135,9 +164,6 @@ class WebViewDownloader(
     }
 }
 
-/**
- * JS-facing bridge. Only exposes two methods to the page.
- */
 private class JsBlobBridge(
     private val onBlob: (String, String?) -> Unit
 ) {
@@ -148,6 +174,6 @@ private class JsBlobBridge(
 
     @android.webkit.JavascriptInterface
     fun onError(message: String) {
-        // no-op — surfaced via toast on caller side if needed
+        // no-op
     }
 }

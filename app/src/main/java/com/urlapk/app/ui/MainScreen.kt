@@ -1,6 +1,9 @@
 package com.urlapk.app.ui
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
 import android.view.View
 import android.view.ViewGroup
@@ -26,8 +29,11 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +51,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -62,6 +69,12 @@ import com.urlapk.app.webview.WebViewManager
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+data class LongPressTarget(
+    val url: String,
+    val mimeType: String?,
+    val suggestedName: String
+)
+
 @Composable
 fun MainScreen(
     viewModel: MainViewModel = viewModel()
@@ -72,11 +85,16 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
 
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var longPressTarget by remember { mutableStateOf<LongPressTarget?>(null) }
 
     val downloader = remember {
-        WebViewDownloader(context) { msg ->
-            scope.launch { Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
-        }
+        WebViewDownloader(
+            context = context,
+            onToast = { msg -> scope.launch { Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() } },
+            onLongPressMedia = { url, mime, name ->
+                longPressTarget = LongPressTarget(url, mime, name)
+            }
+        )
     }
 
     var fullscreenView by remember { mutableStateOf<View?>(null) }
@@ -161,12 +179,55 @@ fun MainScreen(
             onToggleDesktop = { viewModel.toggleDesktopMode() }
         )
     }
+
+    longPressTarget?.let { target ->
+        LongPressDialog(
+            target = target,
+            onDownload = {
+                downloader.downloadUrl(target.url)
+                longPressTarget = null
+            },
+            onCopyLink = {
+                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("url", target.url))
+                Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
+                longPressTarget = null
+            },
+            onDismiss = { longPressTarget = null }
+        )
+    }
 }
 
-/**
- * Tiny pill that stays exactly where the user leaves it.
- * Position stored as Float Offset to keep drag butter-smooth.
- */
+@Composable
+private fun LongPressDialog(
+    target: LongPressTarget,
+    onDownload: () -> Unit,
+    onCopyLink: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Image options") },
+        text = {
+            Text(
+                text = target.url,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onDownload) { Text("Download") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onCopyLink) { Text("Copy link") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
+}
+
 @Composable
 private fun FloatingControl(
     isDesktop: Boolean,
@@ -181,11 +242,9 @@ private fun FloatingControl(
     var expanded by remember { mutableStateOf(false) }
     var position by remember { mutableStateOf<Offset?>(null) }
 
-    // Compute pill's current pixel width based on expanded state
     val pillWidthPx: Float = buttonPx * (if (expanded) 2f else 1f)
     val pillHeightPx: Float = buttonPx
 
-    // Place default position once we know the container size
     LaunchedEffect(containerSize) {
         if (containerSize.width > 0 && position == null) {
             position = Offset(
@@ -230,7 +289,6 @@ private fun FloatingControl(
                     .clickable {
                         val p = position ?: Offset(0f, 0f)
                         position = if (!expanded) {
-                            // Growing: keep chevron roughly in place, shift pill left
                             Offset(
                                 x = (p.x - buttonPx).coerceIn(
                                     0f,
@@ -239,7 +297,6 @@ private fun FloatingControl(
                                 y = p.y
                             )
                         } else {
-                            // Shrinking: shift back right, clamp to screen
                             Offset(
                                 x = (p.x + buttonPx).coerceIn(
                                     0f,
