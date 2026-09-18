@@ -14,31 +14,20 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DesktopWindows
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -50,13 +39,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -67,15 +55,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.urlapk.app.util.Constants
-import com.urlapk.app.util.UrlValidator
 import com.urlapk.app.webview.UrlWebChromeClient
 import com.urlapk.app.webview.UrlWebViewClient
 import com.urlapk.app.webview.WebViewDownloader
 import com.urlapk.app.webview.WebViewManager
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-
-private enum class Corner { TopStart, TopEnd, BottomStart, BottomEnd }
+import kotlin.math.roundToInt
 
 @Composable
 fun MainScreen(
@@ -172,145 +157,114 @@ fun MainScreen(
         )
 
         FloatingControl(
-            currentUrl = state.currentUrl,
             isDesktop = state.isDesktopMode,
-            onUrlSubmit = { raw ->
-                val normalized = UrlValidator.normalize(raw)
-                if (normalized != null) {
-                    webView?.loadUrl(normalized)
-                } else {
-                    Toast.makeText(context, "Invalid URL", Toast.LENGTH_SHORT).show()
-                }
-            },
             onToggleDesktop = { viewModel.toggleDesktopMode() }
         )
     }
 }
 
 /**
- * Draggable floating pill anchored to one of the four screen corners.
- *
- * Collapsed: small pill with a chevron. Tap chevron -> expands and shows
- *            two extra icons (URL input, desktop/mobile toggle).
- * Expanded:  same pill grows leftward (or rightward if on the left side)
- *            revealing the extra icons. Tap chevron again -> collapse.
- *
- * Drag the pill anywhere; on release it snaps to the nearest corner.
+ * Tiny pill that stays exactly where the user leaves it.
+ * Position stored as Float Offset to keep drag butter-smooth.
  */
 @Composable
 private fun FloatingControl(
-    currentUrl: String,
     isDesktop: Boolean,
-    onUrlSubmit: (String) -> Unit,
     onToggleDesktop: () -> Unit
 ) {
     val density = LocalDensity.current
     val marginPx = with(density) { 12.dp.toPx() }
-    val buttonSizePx = with(density) { 44.dp.toPx() }
-    val expandedWidthPx = with(density) { 44.dp.toPx() * 3 }
+    val buttonPx = with(density) { 22.dp.toPx() }
+    val iconSize = 14.dp
 
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
-    var controlSize by remember { mutableStateOf(IntSize.Zero) }
-    var corner by remember { mutableStateOf(Corner.TopEnd) }
     var expanded by remember { mutableStateOf(false) }
-    var showUrlDialog by remember { mutableStateOf(false) }
+    var position by remember { mutableStateOf<Offset?>(null) }
 
-    // Drag-time transient position (null = use corner-derived position)
-    var dragPos by remember { mutableStateOf<IntOffset?>(null) }
+    // Compute pill's current pixel width based on expanded state
+    val pillWidthPx: Float = buttonPx * (if (expanded) 2f else 1f)
+    val pillHeightPx: Float = buttonPx
 
-    // Compute position from corner
-    val isRight = corner == Corner.TopEnd || corner == Corner.BottomEnd
-    val isTop = corner == Corner.TopStart || corner == Corner.TopEnd
-
-    val derivedX = if (isRight) {
-        (containerSize.width - controlSize.width - marginPx).toInt()
-    } else {
-        marginPx.toInt()
+    // Place default position once we know the container size
+    LaunchedEffect(containerSize) {
+        if (containerSize.width > 0 && position == null) {
+            position = Offset(
+                x = (containerSize.width - pillWidthPx - marginPx).coerceAtLeast(0f),
+                y = marginPx
+            )
+        }
     }
-    val derivedY = if (isTop) {
-        marginPx.toInt()
-    } else {
-        (containerSize.height - controlSize.height - marginPx).toInt()
-    }
-
-    val currentOffset = dragPos ?: IntOffset(derivedX, derivedY)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { containerSize = it }
     ) {
+        val pos = position ?: Offset(0f, 0f)
+
         Row(
             modifier = Modifier
-                .offset { currentOffset }
-                .onSizeChanged { controlSize = it }
-                .pointerInput(containerSize, controlSize) {
+                .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
+                .height(22.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
+                .pointerInput(containerSize, expanded) {
                     detectDragGestures(
-                        onDragStart = {
-                            dragPos = IntOffset(derivedX, derivedY)
-                        },
                         onDrag = { change, drag ->
                             change.consume()
-                            val p = dragPos ?: IntOffset(derivedX, derivedY)
-                            val nx = (p.x + drag.x.toInt())
-                                .coerceIn(marginPx.toInt(), (containerSize.width - controlSize.width - marginPx).toInt())
-                            val ny = (p.y + drag.y.toInt())
-                                .coerceIn(marginPx.toInt(), (containerSize.height - controlSize.height - marginPx).toInt())
-                            dragPos = IntOffset(nx, ny)
-                        },
-                        onDragEnd = {
-                            val p = dragPos
-                            if (p != null) {
-                                val cx = p.x + controlSize.width / 2
-                                val cy = p.y + controlSize.height / 2
-                                corner = when {
-                                    cx < containerSize.width / 2 && cy < containerSize.height / 2 -> Corner.TopStart
-                                    cx >= containerSize.width / 2 && cy < containerSize.height / 2 -> Corner.TopEnd
-                                    cx < containerSize.width / 2 && cy >= containerSize.height / 2 -> Corner.BottomStart
-                                    else -> Corner.BottomEnd
-                                }
-                            }
-                            dragPos = null
+                            val p = position ?: Offset(0f, 0f)
+                            val maxX = (containerSize.width - pillWidthPx).coerceAtLeast(0f)
+                            val maxY = (containerSize.height - pillHeightPx).coerceAtLeast(0f)
+                            position = Offset(
+                                x = (p.x + drag.x).coerceIn(0f, maxX),
+                                y = (p.y + drag.y).coerceIn(0f, maxY)
+                            )
                         }
                     )
-                }
-                .height(44.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)),
+                },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Chevron toggle (always visible)
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clickable { expanded = !expanded },
+                    .size(22.dp)
+                    .clickable {
+                        val p = position ?: Offset(0f, 0f)
+                        position = if (!expanded) {
+                            // Growing: keep chevron roughly in place, shift pill left
+                            Offset(
+                                x = (p.x - buttonPx).coerceIn(
+                                    0f,
+                                    (containerSize.width - pillWidthPx * 2f).coerceAtLeast(0f)
+                                ),
+                                y = p.y
+                            )
+                        } else {
+                            // Shrinking: shift back right, clamp to screen
+                            Offset(
+                                x = (p.x + buttonPx).coerceIn(
+                                    0f,
+                                    (containerSize.width - buttonPx).coerceAtLeast(0f)
+                                ),
+                                y = p.y
+                            )
+                        }
+                        expanded = !expanded
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (expanded) Icons.Filled.ChevronRight
                     else Icons.Filled.ChevronLeft,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = Color.White
+                    tint = Color.White,
+                    modifier = Modifier.size(iconSize)
                 )
             }
 
-            // Extra icons (only when expanded)
             if (expanded) {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
-                        .clickable { showUrlDialog = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Link,
-                        contentDescription = "Open URL",
-                        tint = Color.White
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
+                        .size(22.dp)
                         .clickable { onToggleDesktop() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -318,54 +272,11 @@ private fun FloatingControl(
                         imageVector = if (isDesktop) Icons.Filled.PhoneAndroid
                         else Icons.Filled.DesktopWindows,
                         contentDescription = if (isDesktop) "Switch to mobile" else "Switch to desktop",
-                        tint = Color.White
+                        tint = Color.White,
+                        modifier = Modifier.size(iconSize)
                     )
                 }
             }
         }
     }
-
-    if (showUrlDialog) {
-        UrlInputDialog(
-            initialUrl = currentUrl,
-            onDismiss = { showUrlDialog = false },
-            onSubmit = { url ->
-                onUrlSubmit(url)
-                showUrlDialog = false
-            }
-        )
-    }
-}
-
-@Composable
-private fun UrlInputDialog(
-    initialUrl: String,
-    onDismiss: () -> Unit,
-    onSubmit: (String) -> Unit
-) {
-    var text by remember(initialUrl) { mutableStateOf(initialUrl) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Open URL") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("https://…") },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Go
-                ),
-                keyboardActions = KeyboardActions(onGo = { onSubmit(text) })
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onSubmit(text) }) { Text("Open") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
 }
