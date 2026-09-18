@@ -28,5 +28,5 @@
     <!-- ============================================== -->
     <!--  HOME URL - change this to open a different site -->
     <!-- ============================================== -->
-    <string name="home_url" translatable="false">https://github.com</string>
+    <string name="home_url" translatable="false">https://roadmap.sh</string>
 </resources>
