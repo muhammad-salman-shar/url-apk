@@ -8,7 +8,7 @@ package com.urlapk.app.util
  * before any Context is available. Keep it in sync with strings.xml.
  */
 object Constants {
-    const val DEFAULT_HOME_URL = "https://chat.z.ai"
+    const val DEFAULT_HOME_URL = "https://www.google.com"
     const val DESKTOP_UA =
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) " +
         "Chrome/122.0.0.0 Safari/537.36"
