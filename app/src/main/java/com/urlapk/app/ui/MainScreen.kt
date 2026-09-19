@@ -530,3 +530,180 @@ private fun DownloadsDialog(
         }
     )
 }
+
+@Composable
+private fun FloatingControl(
+    currentUrl: String,
+    canBack: Boolean,
+    canForward: Boolean,
+    isDesktop: Boolean,
+    onNavigate: (String) -> Boolean,
+    onBack: () -> Unit,
+    onForward: () -> Unit,
+    onReload: () -> Unit,
+    onToggleDesktop: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    downloadCount: Int
+) {
+    val density = LocalDensity.current
+    val marginPx = with(density) { 12.dp.toPx() }
+    val buttonPx = with(density) { 26.dp.toPx() }
+    val iconSize = 16.dp
+    val cardWidth = 240.dp
+
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    var expanded by remember { mutableStateOf(false) }
+    var position by remember { mutableStateOf<Offset?>(null) }
+    var urlField by remember(currentUrl) { mutableStateOf(currentUrl) }
+
+    val pillWidthPx: Float = buttonPx
+
+    LaunchedEffect(containerSize) {
+        if (containerSize.width > 0 && position == null) {
+            position = Offset(
+                x = (containerSize.width - pillWidthPx - marginPx).coerceAtLeast(0f),
+                y = marginPx
+            )
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { containerSize = it }
+    ) {
+        val pos = position ?: Offset(0f, 0f)
+
+        Row(
+            modifier = Modifier
+                .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
+                .height(26.dp)
+                .clip(RoundedCornerShape(13.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
+                .pointerInput(containerSize) {
+                    detectDragGestures(
+                        onDrag = { change, drag ->
+                            change.consume()
+                            val p = position ?: Offset(0f, 0f)
+                            val maxX = (containerSize.width - pillWidthPx).coerceAtLeast(0f)
+                            val maxY = (containerSize.height - buttonPx).coerceAtLeast(0f)
+                            position = Offset(
+                                x = (p.x + drag.x).coerceIn(0f, maxX),
+                                y = (p.y + drag.y).coerceIn(0f, maxY)
+                            )
+                        }
+                    )
+                },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .clickable {
+                        urlField = currentUrl
+                        expanded = !expanded
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.ChevronRight
+                    else Icons.Filled.ChevronLeft,
+                    contentDescription = if (expanded) "Close controls" else "Open controls",
+                    tint = Color.White,
+                    modifier = Modifier.size(iconSize)
+                )
+            }
+        }
+
+        if (expanded) {
+            val onRightHalf = pos.x > containerSize.width / 2f
+            val onBottomHalf = pos.y > containerSize.height / 2f
+            val cardWidthPx = with(density) { cardWidth.toPx() }
+
+            val cardX = if (onRightHalf) {
+                (pos.x - cardWidthPx + buttonPx).coerceIn(
+                    0f,
+                    (containerSize.width - cardWidthPx).coerceAtLeast(0f)
+                )
+            } else {
+                pos.x.coerceIn(0f, (containerSize.width - cardWidthPx).coerceAtLeast(0f))
+            }
+            val cardY = if (onBottomHalf) {
+                (pos.y - with(density) { 200.dp.toPx() }).coerceAtLeast(marginPx)
+            } else {
+                (pos.y + buttonPx + marginPx)
+            }
+
+            Card(
+                modifier = Modifier
+                    .offset { IntOffset(cardX.roundToInt(), cardY.roundToInt()) }
+                    .width(cardWidth),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = urlField,
+                        onValueChange = { urlField = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("https://…") },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Go
+                        ),
+                        keyboardActions = KeyboardActions(onGo = {
+                            if (onNavigate(urlField)) expanded = false
+                        })
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onBack, enabled = canBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                        IconButton(onClick = onForward, enabled = canForward) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Forward")
+                        }
+                        IconButton(onClick = onReload) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Reload")
+                        }
+                        IconButton(onClick = onOpenHistory) {
+                            Icon(Icons.Filled.History, contentDescription = "History")
+                        }
+                        Box {
+                            IconButton(onClick = onOpenDownloads) {
+                                Icon(Icons.Filled.Download, contentDescription = "Downloads")
+                            }
+                            if (downloadCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 6.dp, end = 6.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color.Red)
+                                )
+                            }
+                        }
+                        IconButton(onClick = onToggleDesktop) {
+                            Icon(
+                                imageVector = if (isDesktop) Icons.Filled.PhoneAndroid
+                                else Icons.Filled.DesktopWindows,
+                                contentDescription = if (isDesktop) "Mobile site" else "Desktop site"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
