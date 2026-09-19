@@ -9,6 +9,7 @@ import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.URLUtil
 import android.webkit.WebView
+import com.urlapk.app.util.DownloadTracker
 import com.urlapk.app.util.FileUtils
 
 /**
@@ -58,7 +59,8 @@ class WebViewDownloader(
                 setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
             }
             val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            manager.enqueue(request)
+            val id = manager.enqueue(request)
+            DownloadTracker.track(context, id, fileName)
             onToast("Download started: $fileName")
         } catch (e: Exception) {
             onToast("Download failed: ${e.message ?: "unknown"}")

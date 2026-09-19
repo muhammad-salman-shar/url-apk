@@ -2,6 +2,7 @@ package com.urlapk.app.ui
 
 import android.app.Activity
 import android.content.ClipData
+import android.app.DownloadManager
 import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
@@ -40,6 +41,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DesktopWindows
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
@@ -47,6 +50,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -81,11 +85,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.urlapk.app.R
+import com.urlapk.app.util.DownloadTracker
 import com.urlapk.app.util.UrlValidator
 import com.urlapk.app.webview.UrlWebChromeClient
 import com.urlapk.app.webview.UrlWebViewClient
 import com.urlapk.app.webview.WebViewDownloader
 import com.urlapk.app.webview.WebViewManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -113,6 +119,8 @@ fun MainScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var longPressTarget by remember { mutableStateOf<LongPressTarget?>(null) }
     var showHistory by remember { mutableStateOf(false) }
+    var showDownloads by remember { mutableStateOf(false) }
+    val downloadItems by DownloadTracker.items.collectAsStateWithLifecycle()
     var historyEntries by remember { mutableStateOf<List<HistoryEntry>>(emptyList()) }
 
     val downloader = remember {
@@ -173,6 +181,14 @@ fun MainScreen(
 
     LaunchedEffect(state.isDesktopMode) {
         webView?.let { WebViewManager.applyDesktopMode(context, it, state.isDesktopMode) }
+    }
+
+    // Poll DownloadManager while the downloads dialog is open.
+    LaunchedEffect(showDownloads) {
+        while (showDownloads) {
+            DownloadTracker.refresh(context)
+            kotlinx.coroutines.delay(500L)
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -262,7 +278,12 @@ fun MainScreen(
                     }.reversed()
                     showHistory = true
                 }
-            }
+            },
+            onOpenDownloads = {
+                DownloadTracker.refresh(context)
+                showDownloads = true
+            },
+            downloadCount = downloadItems.count { !it.isFinished }
         )
     }
 
@@ -291,6 +312,18 @@ fun MainScreen(
                 showHistory = false
             },
             onDismiss = { showHistory = false }
+        )
+    }
+
+    if (showDownloads) {
+        DownloadsDialog(
+            items = downloadItems,
+            onCancel = { id -> DownloadTracker.cancel(context, id) },
+            onClearFinished = { DownloadTracker.clearFinished() },
+            onDismiss = {
+                DownloadTracker.clearFinished()
+                showDownloads = false
+            }
         )
     }
 }
@@ -373,6 +406,88 @@ private fun HistoryDialog(
 }
 
 @Composable
+@Composable
+private fun DownloadsDialog(
+    items: List<DownloadTracker.Item>,
+    onCancel: (Long) -> Unit,
+    onClearFinished: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Downloads") },
+        text = {
+            if (items.isEmpty()) {
+                Text("No active downloads")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(items, key = { it.id }) { item ->
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = item.fileName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Box(modifier = Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = { item.progressFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                            )
+                            Box(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = when (item.status) {
+                                        DownloadManager.STATUS_SUCCESSFUL -> "Done - ${item.progressText}"
+                                        DownloadManager.STATUS_FAILED -> "Failed"
+                                        DownloadManager.STATUS_PAUSED -> "Paused - ${item.progressText}"
+                                        DownloadManager.STATUS_PENDING -> "Queued"
+                                        else -> item.progressText
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                                if (!item.isFinished) {
+                                    IconButton(
+                                        onClick = { onCancel(item.id) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Delete,
+                                            contentDescription = "Cancel download",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(
+                onClick = onClearFinished,
+                enabled = items.any { it.isFinished }
+            ) { Text("Clear finished") }
+        }
+    )
+}
+
 private fun FloatingControl(
     currentUrl: String,
     canBack: Boolean,
@@ -383,13 +498,15 @@ private fun FloatingControl(
     onForward: () -> Unit,
     onReload: () -> Unit,
     onToggleDesktop: () -> Unit,
-    onOpenHistory: () -> Unit
+    onOpenHistory: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    downloadCount: Int
 ) {
     val density = LocalDensity.current
     val marginPx = with(density) { 12.dp.toPx() }
-    val buttonPx = with(density) { 22.dp.toPx() }
-    val iconSize = 14.dp
-    val cardWidth = 300.dp
+    val buttonPx = with(density) { 26.dp.toPx() }
+    val iconSize = 16.dp
+    val cardWidth = 240.dp
 
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var expanded by remember { mutableStateOf(false) }
@@ -417,8 +534,8 @@ private fun FloatingControl(
         Row(
             modifier = Modifier
                 .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
-                .height(22.dp)
-                .clip(RoundedCornerShape(11.dp))
+                .height(26.dp)
+                .clip(RoundedCornerShape(13.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
                 .pointerInput(containerSize) {
                     detectDragGestures(
@@ -438,7 +555,7 @@ private fun FloatingControl(
         ) {
             Box(
                 modifier = Modifier
-                    .size(22.dp)
+                    .size(26.dp)
                     .clickable {
                         urlField = currentUrl
                         expanded = !expanded
@@ -517,6 +634,21 @@ private fun FloatingControl(
                         }
                         IconButton(onClick = onOpenHistory) {
                             Icon(Icons.Filled.History, contentDescription = "History")
+                        }
+                        Box {
+                            IconButton(onClick = onOpenDownloads) {
+                                Icon(Icons.Filled.Download, contentDescription = "Downloads")
+                            }
+                            if (downloadCount > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 6.dp, end = 6.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color.Red)
+                                )
+                            }
                         }
                         IconButton(onClick = onToggleDesktop) {
                             Icon(
