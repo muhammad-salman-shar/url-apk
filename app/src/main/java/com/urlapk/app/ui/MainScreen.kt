@@ -125,6 +125,8 @@ fun MainScreen(
         )
     }
 
+    var popupViews by remember { mutableStateOf<MutableList<WebView>>(mutableListOf()) }
+
     var fullscreenView by remember { mutableStateOf<View?>(null) }
     var fullscreenCallback by remember { mutableStateOf<WebChromeClient.CustomViewCallback?>(null) }
     var filePathCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
@@ -154,6 +156,14 @@ fun MainScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
             WebViewManager.destroyWebView(webView, webView?.parent as? ViewGroup)
             webView = null
+            popupViews.forEach { pw ->
+                try {
+                    pw.stopLoading()
+                    pw.loadUrl("about:blank")
+                    pw.destroy()
+                } catch (_: Throwable) {}
+            }
+            popupViews.clear()
         }
     }
 
@@ -191,6 +201,23 @@ fun MainScreen(
                             val intent = params.createIntent()
                             fileChooserLauncher.launch(intent)
                             true
+                        },
+                        onPopupCreated = { popup ->
+                            // Headless popup: attach the same downloader so any
+                            // file it triggers goes through DownloadManager.
+                            downloader.attach(popup)
+                            popupViews.add(popup)
+                            // Destroy after 30s to free memory. Real downloads
+                            // are already handed off to DownloadManager by then.
+                            android.os.Handler(android.os.Looper.getMainLooper())
+                                .postDelayed({
+                                    try {
+                                        popup.stopLoading()
+                                        popup.loadUrl("about:blank")
+                                        popup.destroy()
+                                    } catch (_: Throwable) {}
+                                    popupViews.remove(popup)
+                                }, 30_000L)
                         }
                     )
                     downloader.attach(wv)

@@ -35,6 +35,8 @@ object WebViewManager {
 
     private fun WebSettings.applySettings() {
         javaScriptEnabled = true
+        setSupportMultipleWindows(true)
+        javaScriptCanOpenWindowsAutomatically = true
         domStorageEnabled = true
         databaseEnabled = true
         loadsImagesAutomatically = true

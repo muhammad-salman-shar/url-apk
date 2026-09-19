@@ -13,21 +13,25 @@ import android.webkit.WebView
 import androidx.core.content.ContextCompat
 
 /**
- * Bridges WebView's native feature requests (camera, mic, file upload,
- * fullscreen video, progress, popup windows) into the Compose/Activity layer.
+ * Bridges WebView's native feature requests into the Compose/Activity layer.
  *
- * Popup strategy: window.open() popups are BLOCKED. Sites like savefrom.net
- * fire their ad in a popup while the real download runs in the background.
- * Blocking the popup keeps the user on the original page and lets the
- * DownloadListener fire normally. This matches Chrome's built-in popup
- * blocker behaviour for the most common ad pattern.
+ * Popup strategy (updated):
+ *   Instead of BLOCKING window.open() popups, we create a HEADLESS WebView
+ *   that loads the popup URL in the background. The popup WebView is never
+ *   attached to the view hierarchy and is destroyed after use.
+ *
+ *   Why: sites like savefrom.net fire their real download URL inside a
+ *   window.open() popup, while the main window is redirected to an ad.
+ *   Blocking the popup loses the download URL; running it headless lets
+ *   the DownloadListener fire on the popup's WebView.
  */
 class UrlWebChromeClient(
     private val activity: Activity,
     private val onProgressChanged: (Int) -> Unit,
     private val onTitleReceived: (String?) -> Unit,
     private val onFullscreenViewRequested: (View?, WebChromeClient.CustomViewCallback?) -> Unit,
-    private val launchFileChooser: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams) -> Boolean
+    private val launchFileChooser: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams) -> Boolean,
+    private val onPopupCreated: (WebView) -> Unit
 ) : WebChromeClient() {
 
     override fun onProgressChanged(view: WebView, newProgress: Int) {
@@ -52,10 +56,7 @@ class UrlWebChromeClient(
             activity, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
 
-        val cameraOk = !needsCamera || cameraGranted
-        val micOk = !needsMic || micGranted
-
-        if (cameraOk && micOk) {
+        if ((!needsCamera || cameraGranted) && (!needsMic || micGranted)) {
             request.grant(resources)
         } else {
             request.deny()
@@ -66,9 +67,7 @@ class UrlWebChromeClient(
         webView: WebView,
         filePathCallback: ValueCallback<Array<Uri>>,
         fileChooserParams: FileChooserParams
-    ): Boolean {
-        return launchFileChooser(filePathCallback, fileChooserParams)
-    }
+    ): Boolean = launchFileChooser(filePathCallback, fileChooserParams)
 
     override fun onShowCustomView(view: View, callback: CustomViewCallback) {
         onFullscreenViewRequested(view, callback)
@@ -79,10 +78,16 @@ class UrlWebChromeClient(
     }
 
     /**
-     * Popup blocker. Returning true means "we handled the new window", but
-     * since we never create a WebView, the popup is silently dropped and
-     * the current page stays intact. The user's download trigger remains
-     * in place, and any real file download continues via DownloadListener.
+     * Handle window.open() by creating a HEADLESS WebView.
+     *
+     * The new WebView is NOT attached to any parent, so the user never sees
+     * it. It receives the same WebViewClient configuration (so
+     * shouldOverrideUrlLoading and onPageFinished work) and its own
+     * DownloadListener, so any file the popup tries to download will be
+     * routed through our DownloadManager path.
+     *
+     * After the popup navigates away from its initial URL or after a short
+     * grace period, MainScreen destroys it to free memory.
      */
     override fun onCreateWindow(
         view: WebView,
@@ -90,6 +95,20 @@ class UrlWebChromeClient(
         isUserGesture: Boolean,
         resultMsg: Message
     ): Boolean {
+        val popup = WebView(view.context).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.userAgentString = view.settings.userAgentString
+        }
+        popup.webViewClient = view.webViewClient
+        popup.webChromeClient = this
+        onPopupCreated(popup)
+
+        val transport = resultMsg.obj as? WebView.WebViewTransport
+        if (transport != null) {
+            transport.webView = popup
+            resultMsg.sendToTarget()
+        }
         return true
     }
 }
