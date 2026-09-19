@@ -1,4 +1,4 @@
-package com.urlapk.app.util
+package com.neurasamu.build.browser_lite.util
 
 import android.content.Context
 import android.util.Log
@@ -18,7 +18,7 @@ import java.util.Locale
  */
 object CrashLogger {
 
-    private const val TAG = "UrlApkCrash"
+    private const val TAG = "NeuraBrowserCrash"
     private const val FILE_NAME = "crash.txt"
 
     fun install(context: Context) {

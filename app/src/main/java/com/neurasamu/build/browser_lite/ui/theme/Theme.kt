@@ -1,4 +1,4 @@
-package com.urlapk.app.ui.theme
+package com.neurasamu.build.browser_lite.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -32,7 +32,7 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun UrlApkTheme(
+fun NeuraBrowserTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {

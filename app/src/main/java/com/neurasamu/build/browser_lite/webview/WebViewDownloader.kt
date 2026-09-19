@@ -1,4 +1,4 @@
-package com.urlapk.app.webview
+package com.neurasamu.build.browser_lite.webview
 
 import android.content.Context
 import android.os.Environment
@@ -7,8 +7,8 @@ import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.URLUtil
 import android.webkit.WebView
-import com.urlapk.app.util.DownloadEngine
-import com.urlapk.app.util.FileUtils
+import com.neurasamu.build.browser_lite.util.DownloadEngine
+import com.neurasamu.build.browser_lite.util.FileUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -1,4 +1,4 @@
-package com.urlapk.app.webview
+package com.neurasamu.build.browser_lite.webview
 
 import android.Manifest
 import android.app.Activity

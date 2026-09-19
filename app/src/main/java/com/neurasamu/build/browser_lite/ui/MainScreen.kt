@@ -1,4 +1,4 @@
-package com.urlapk.app.ui
+package com.neurasamu.build.browser_lite.ui
 
 import android.app.Activity
 import android.content.ClipData
@@ -86,13 +86,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.urlapk.app.R
-import com.urlapk.app.util.DownloadEngine
-import com.urlapk.app.util.UrlValidator
-import com.urlapk.app.webview.UrlWebChromeClient
-import com.urlapk.app.webview.UrlWebViewClient
-import com.urlapk.app.webview.WebViewDownloader
-import com.urlapk.app.webview.WebViewManager
+import com.neurasamu.build.browser_lite.R
+import com.neurasamu.build.browser_lite.util.DownloadEngine
+import com.neurasamu.build.browser_lite.util.DownloadNotifications
+import com.neurasamu.build.browser_lite.util.UrlValidator
+import com.neurasamu.build.browser_lite.webview.UrlWebChromeClient
+import com.neurasamu.build.browser_lite.webview.UrlWebViewClient
+import com.neurasamu.build.browser_lite.webview.WebViewDownloader
+import com.neurasamu.build.browser_lite.webview.WebViewManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -311,7 +312,15 @@ fun MainScreen(
     if (showDownloads) {
         DownloadsDialog(
             items = downloadItems,
-            onPause = { id -> DownloadEngine.pause(id) },
+            onPause = { id ->
+                DownloadEngine.pause(id)
+                val item = downloadItems.firstOrNull { it.id == id }
+                if (item != null) {
+                    DownloadNotifications.showPaused(
+                        context, id, item.fileName, item.bytesDone, item.bytesTotal
+                    )
+                }
+            },
             onResume = { id -> DownloadEngine.resume(context, id) },
             onCancel = { id -> DownloadEngine.cancel(id) },
             onClearFinished = { DownloadEngine.clearFinished() },

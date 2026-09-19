@@ -5,14 +5,14 @@ plugins {
 }
 
 android {
-    namespace = "com.urlapk.app"
+    namespace = "com.neurasamu.build.browser_lite"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.urlapk.app"
+        applicationId = "com.neurasamu.build.browser_lite"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
+        versionCode = 106
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

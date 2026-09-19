@@ -1,4 +1,4 @@
-package com.urlapk.app.webview
+package com.neurasamu.build.browser_lite.webview
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -7,7 +7,7 @@ import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
-import com.urlapk.app.util.Constants
+import com.neurasamu.build.browser_lite.util.Constants
 
 /**
  * Central place for all WebView configuration.

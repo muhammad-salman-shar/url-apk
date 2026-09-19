@@ -1,4 +1,4 @@
-package com.urlapk.app.util
+package com.neurasamu.build.browser_lite.util
 
 import android.content.ContentValues
 import android.content.Context
@@ -208,6 +208,9 @@ object DownloadEngine {
                         ) else it
                     }
                 }
+                DownloadNotifications.showFailed(
+                    context, rt.id, rt.fileName, t.message ?: "Unknown error"
+                )
             }
         }
     }
@@ -279,6 +282,11 @@ object DownloadEngine {
                                     ) else it
                                 }
                             }
+                            // Live notification so progress is visible while
+                            // the app is backgrounded.
+                            DownloadNotifications.showProgress(
+                                context, rt.id, rt.fileName, done, total, speed
+                            )
                             lastTick = now
                             bytesSinceTick = 0L
                         }
@@ -316,6 +324,7 @@ object DownloadEngine {
                     ) else it
                 }
             }
+            DownloadNotifications.showComplete(context, rt.id, rt.fileName)
         }
     }
 

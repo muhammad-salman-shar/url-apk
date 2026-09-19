@@ -1,4 +1,4 @@
-package com.urlapk.app.util
+package com.neurasamu.build.browser_lite.util
 
 import android.net.Uri
 

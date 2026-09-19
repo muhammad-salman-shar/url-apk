@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">URL in App</string>
+    <string name="app_name">Neura Browser</string>
     <string name="url_hint">https://example.com</string>
     <string name="go">Go</string>
     <string name="home">Home</string>

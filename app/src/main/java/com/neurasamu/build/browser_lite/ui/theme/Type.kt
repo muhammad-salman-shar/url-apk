@@ -1,4 +1,4 @@
-package com.urlapk.app.ui.theme
+package com.neurasamu.build.browser_lite.ui.theme
 
 import androidx.compose.material3.Typography
 

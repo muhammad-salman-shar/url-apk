@@ -1,4 +1,4 @@
-package com.urlapk.app.webview
+package com.neurasamu.build.browser_lite.webview
 
 import android.graphics.Bitmap
 import android.net.http.SslError
@@ -8,7 +8,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import com.urlapk.app.util.AdBlocker
+import com.neurasamu.build.browser_lite.util.AdBlocker
 import java.io.ByteArrayInputStream
 
 /**

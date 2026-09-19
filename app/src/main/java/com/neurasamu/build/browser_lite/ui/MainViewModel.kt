@@ -1,7 +1,7 @@
-package com.urlapk.app.ui
+package com.neurasamu.build.browser_lite.ui
 
 import androidx.lifecycle.ViewModel
-import com.urlapk.app.util.Constants
+import com.neurasamu.build.browser_lite.util.Constants
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
