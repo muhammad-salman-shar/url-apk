@@ -193,6 +193,14 @@ object DownloadEngine {
         _items.update { list -> list.filterNot { it.state == State.DONE || it.state == State.FAILED } }
     }
 
+    // Bound from Application.onCreate so cancel() / clearFinished() can
+    // dismiss any lingering notification.
+    @Volatile private var notificationContext: Context? = null
+
+    fun bindContext(context: Context) {
+        notificationContext = context.applicationContext
+    }
+
     private fun startJob(context: Context, rt: Runtime, resume: Boolean) {
         _items.update { list ->
             list.map { if (it.id == rt.id) it.copy(state = State.RUNNING, errorMessage = null) else it }

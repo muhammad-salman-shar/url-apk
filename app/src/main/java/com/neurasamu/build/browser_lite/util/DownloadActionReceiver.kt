@@ -16,7 +16,7 @@ class DownloadActionReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_PAUSE -> DownloadEngine.pause(id)
             ACTION_RESUME -> DownloadEngine.resume(context.applicationContext, id)
-            ACTION_CANCEL -> DownloadEngine.cancel(context.applicationContext, id)
+            ACTION_CANCEL -> DownloadEngine.cancel(id)
         }
     }
 
