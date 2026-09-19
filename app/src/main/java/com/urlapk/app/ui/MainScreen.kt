@@ -398,7 +398,6 @@ private fun HistoryDialog(
 }
 
 @Composable
-@Composable
 private fun DownloadsDialog(
     items: List<DownloadEngine.Item>,
     onPause: (Long) -> Unit,
