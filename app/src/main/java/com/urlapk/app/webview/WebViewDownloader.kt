@@ -1,20 +1,21 @@
 package com.urlapk.app.webview
 
-import android.app.DownloadManager
 import android.content.Context
-import android.net.Uri
 import android.os.Environment
 import android.util.Base64
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.URLUtil
 import android.webkit.WebView
-import com.urlapk.app.util.DownloadTracker
+import com.urlapk.app.util.DownloadEngine
 import com.urlapk.app.util.FileUtils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Handles downloads from WebView:
- *  1. HTTP(S) downloads     -> DownloadManager (system UI, resumable)
+ *  1. HTTP(S) downloads     -> DownloadEngine (custom OkHttp, pause/resume)
  *  2. Blob / data: URLs     -> JS reads bytes -> Base64 -> save
  *  3. Long-press on image   -> hit-test -> offer to download the image
  */
@@ -47,20 +48,20 @@ class WebViewDownloader(
     ) {
         try {
             val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
-            val request = DownloadManager.Request(Uri.parse(url)).apply {
-                setMimeType(mimetype)
-                addRequestHeader("User-Agent", userAgent ?: "")
-                addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
-                setTitle(fileName)
-                setDescription("Downloading…")
-                setNotificationVisibility(
-                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-                )
-                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-            }
-            val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val id = manager.enqueue(request)
-            DownloadTracker.track(context, id, fileName)
+
+            // Forward session cookies so authenticated downloads work.
+            val cookie = CookieManager.getInstance().getCookie(url).orEmpty()
+            val headers = mutableMapOf<String, String>()
+            if (cookie.isNotBlank()) headers["Cookie"] = cookie
+            if (!userAgent.isNullOrBlank()) headers["User-Agent"] = userAgent
+
+            DownloadEngine.enqueue(
+                context = context,
+                url = url,
+                fileName = fileName,
+                mimeType = mimetype,
+                headers = headers
+            )
             onToast("Download started: $fileName")
         } catch (e: Exception) {
             onToast("Download failed: ${e.message ?: "unknown"}")
@@ -102,7 +103,6 @@ class WebViewDownloader(
 
     private var currentWebView: WebView? = null
 
-    /** Attach the downloader to a WebView, expose blob bridge, and enable long-press. */
     fun attach(webView: WebView) {
         currentWebView = webView
         webView.setDownloadListener(this)
@@ -113,12 +113,6 @@ class WebViewDownloader(
         attachLongPressHandler(webView)
     }
 
-    /**
-     * Long-press anywhere -> inspect hitTestResult.
-     * If it's an image, image-anchor, or video src, notify the host so it can
-     * show a "Download" dialog. Returns false so the default WebView menu
-     * (text selection etc.) still works for non-media hits.
-     */
     private fun attachLongPressHandler(webView: WebView) {
         webView.isLongClickable = true
         webView.setOnLongClickListener {
@@ -126,19 +120,19 @@ class WebViewDownloader(
             val type = result.type
             val extra = result.extra
 
-            val (isMedia, mime) = when (type) {
-                WebView.HitTestResult.IMAGE_TYPE -> true to null
-                WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> true to null
-                WebView.HitTestResult.SRC_ANCHOR_TYPE -> true to null
-                else -> false to null
+            val isMedia = when (type) {
+                WebView.HitTestResult.IMAGE_TYPE,
+                WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE,
+                WebView.HitTestResult.SRC_ANCHOR_TYPE -> true
+                else -> false
             }
 
             if (isMedia && !extra.isNullOrBlank() &&
                 (extra.startsWith("http://") || extra.startsWith("https://") ||
                  extra.startsWith("data:") || extra.startsWith("blob:"))
             ) {
-                val name = URLUtil.guessFileName(extra, null, mime)
-                onLongPressMedia(extra, mime, name)
+                val name = URLUtil.guessFileName(extra, null, null)
+                onLongPressMedia(extra, null, name)
                 true
             } else {
                 false
