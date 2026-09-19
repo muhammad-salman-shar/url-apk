@@ -11,11 +11,10 @@ import androidx.core.app.NotificationManagerCompat
 import com.neurasamu.build.browser_lite.MainActivity
 
 /**
- * Posts download progress / completion notifications so the user can see
- * live status in the system tray and tap to return to the app.
- *
- * Progress notifications are ongoing (not dismissible) until the download
- * finishes; completion notifications auto-cancel on tap.
+ * Posts download progress / completion notifications with quick actions
+ * (Pause / Resume / Cancel) that talk back to DownloadEngine via a
+ * BroadcastReceiver. Users never need to reopen the app to control a
+ * download.
  */
 object DownloadNotifications {
 
@@ -45,37 +44,34 @@ object DownloadNotifications {
         total: Long,
         speed: Long
     ) {
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+        val builder = base(context, id)
             .setContentTitle(fileName)
             .setContentText(progressText(done, total, speed))
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setContentIntent(openAppIntent(context))
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-        if (total > 0) {
-            val pct = ((done * 100) / total).toInt().coerceIn(0, 100)
-            builder.setProgress(100, pct, false)
-        } else {
-            builder.setProgress(0, 0, true)
-        }
+            .addAction(
+                android.R.drawable.ic_media_pause, "Pause",
+                actionIntent(context, id, DownloadActionReceiver.ACTION_PAUSE, 100)
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel, "Cancel",
+                actionIntent(context, id, DownloadActionReceiver.ACTION_CANCEL, 101)
+            )
+        applyProgress(builder, done, total)
         notify(context, id, builder)
     }
 
     fun showPaused(context: Context, id: Long, fileName: String, done: Long, total: Long) {
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+        val builder = base(context, id)
             .setContentTitle("$fileName (paused)")
             .setContentText(progressText(done, total, 0L))
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setContentIntent(openAppIntent(context))
-        if (total > 0) {
-            val pct = ((done * 100) / total).toInt().coerceIn(0, 100)
-            builder.setProgress(100, pct, false)
-        } else {
-            builder.setProgress(0, 0, true)
-        }
+            .addAction(
+                android.R.drawable.ic_media_play, "Resume",
+                actionIntent(context, id, DownloadActionReceiver.ACTION_RESUME, 100)
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel, "Cancel",
+                actionIntent(context, id, DownloadActionReceiver.ACTION_CANCEL, 101)
+            )
+        applyProgress(builder, done, total)
         notify(context, id, builder)
     }
 
@@ -105,12 +101,27 @@ object DownloadNotifications {
         } catch (_: Throwable) {}
     }
 
+    private fun base(context: Context, id: Long): NotificationCompat.Builder =
+        NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openAppIntent(context))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+
+    private fun applyProgress(b: NotificationCompat.Builder, done: Long, total: Long) {
+        if (total > 0) {
+            val pct = ((done * 100) / total).toInt().coerceIn(0, 100)
+            b.setProgress(100, pct, false)
+        } else {
+            b.setProgress(0, 0, true)
+        }
+    }
+
     private fun notify(context: Context, id: Long, builder: NotificationCompat.Builder) {
         try {
             NotificationManagerCompat.from(context).notify(id.toInt(), builder.build())
-        } catch (_: SecurityException) {
-            // POST_NOTIFICATIONS not granted; silently ignore
-        }
+        } catch (_: SecurityException) {}
     }
 
     private fun openAppIntent(context: Context): PendingIntent {
@@ -118,9 +129,18 @@ object DownloadNotifications {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         return PendingIntent.getActivity(
-            context,
-            0,
-            intent,
+            context, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    private fun actionIntent(context: Context, id: Long, action: String, reqCode: Int): PendingIntent {
+        val intent = Intent(context, DownloadActionReceiver::class.java).apply {
+            this.action = action
+            putExtra(DownloadActionReceiver.EXTRA_ID, id)
+        }
+        return PendingIntent.getBroadcast(
+            context, (id.toInt() * 100) + reqCode, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
@@ -128,8 +148,7 @@ object DownloadNotifications {
     private fun progressText(done: Long, total: Long, speed: Long): String {
         val d = fmt(done)
         val s = fmt(speed)
-        return if (total > 0) "$d / ${fmt(total)}  ·  $s/s"
-        else "$d  ·  $s/s"
+        return if (total > 0) "$d / ${fmt(total)}  ·  $s/s" else "$d  ·  $s/s"
     }
 
     private fun fmt(b: Long): String {

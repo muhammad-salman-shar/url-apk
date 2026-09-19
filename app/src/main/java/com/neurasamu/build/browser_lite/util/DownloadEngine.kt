@@ -179,12 +179,17 @@ object DownloadEngine {
         rt.job = null
         runCatching { rt.cacheFile.delete() }
         _items.update { list -> list.filterNot { it.id == id } }
+        // Do not leave a stale notification running for a cancelled download.
+        notificationContext?.let { DownloadNotifications.cancel(it, id) }
     }
 
     /** Remove finished/failed items from the list (files already in Downloads). */
     fun clearFinished() {
         val toRemove = _items.value.filter { it.state == State.DONE || it.state == State.FAILED }.map { it.id }
-        toRemove.forEach { id -> synchronized(lock) { runtimes.remove(id) }?.cacheFile?.delete() }
+        toRemove.forEach { id ->
+            synchronized(lock) { runtimes.remove(id) }?.cacheFile?.delete()
+            notificationContext?.let { DownloadNotifications.cancel(it, id) }
+        }
         _items.update { list -> list.filterNot { it.state == State.DONE || it.state == State.FAILED } }
     }
 

@@ -1,5 +1,15 @@
 package com.neurasamu.build.browser_lite.ui
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.Image
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import android.app.Activity
 import android.content.ClipData
 import android.app.DownloadManager
@@ -121,6 +131,7 @@ fun MainScreen(
 
     var webView by remember { mutableStateOf<WebView?>(null) }
     var longPressTarget by remember { mutableStateOf<LongPressTarget?>(null) }
+    var showSplash by remember { mutableStateOf(true) }
     var showHistory by remember { mutableStateOf(false) }
     var showDownloads by remember { mutableStateOf(false) }
     val downloadItems by DownloadEngine.items.collectAsStateWithLifecycle()
@@ -176,6 +187,11 @@ fun MainScreen(
             }
             popupViews.clear()
         }
+    }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1600L)
+        showSplash = false
     }
 
     LaunchedEffect(webView) {
@@ -246,12 +262,12 @@ fun MainScreen(
             canForward = state.canGoForward,
             isDesktop = state.isDesktopMode,
             onNavigate = { raw ->
-                val normalized = UrlValidator.normalize(raw)
-                if (normalized != null) {
-                    webView?.loadUrl(normalized)
+                val target = UrlValidator.resolveInput(raw)
+                if (target != null) {
+                    webView?.loadUrl(target)
                     true
                 } else {
-                    Toast.makeText(context, "Invalid URL", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Invalid input", Toast.LENGTH_SHORT).show()
                     false
                 }
             },
@@ -326,6 +342,16 @@ fun MainScreen(
             onClearFinished = { DownloadEngine.clearFinished() },
             onDismiss = { showDownloads = false }
         )
+    }
+
+
+    // Splash overlay: shown while WebView loads the home page in the
+    // background. Fades out after ~1.6s so the user sees the brand once.
+    AnimatedVisibility(
+        visible = showSplash,
+        exit = fadeOut(animationSpec = tween(durationMillis = 400))
+    ) {
+        SplashOverlay()
     }
 }
 
@@ -556,7 +582,7 @@ private fun FloatingControl(
 ) {
     val density = LocalDensity.current
     val marginPx = with(density) { 12.dp.toPx() }
-    val buttonPx = with(density) { 26.dp.toPx() }
+    val buttonPx = with(density) { 29.dp.toPx() }
     val iconSize = 16.dp
     val cardWidth = 240.dp
 
@@ -586,8 +612,8 @@ private fun FloatingControl(
         Row(
             modifier = Modifier
                 .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
-                .height(26.dp)
-                .clip(RoundedCornerShape(13.dp))
+                .height(29.dp)
+                .clip(RoundedCornerShape(15.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f))
                 .pointerInput(containerSize) {
                     detectDragGestures(
@@ -607,7 +633,7 @@ private fun FloatingControl(
         ) {
             Box(
                 modifier = Modifier
-                    .size(26.dp)
+                    .size(29.dp)
                     .clickable {
                         urlField = currentUrl
                         expanded = !expanded
@@ -733,6 +759,43 @@ private fun FloatingControl(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SplashOverlay() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(R.mipmap.ic_launcher),
+                contentDescription = "Neura Browser",
+                modifier = Modifier
+                    .size(140.dp)
+                    .clip(RoundedCornerShape(32.dp))
+            )
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = "Neura Browser",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Neurasamu Build",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

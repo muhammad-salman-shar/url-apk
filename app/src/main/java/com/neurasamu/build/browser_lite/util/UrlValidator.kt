@@ -30,4 +30,38 @@ object UrlValidator {
         val lower = url.lowercase()
         return lower.contains("google.") && (lower.contains("/search") || lower.contains("?q="))
     }
+
+
+    /**
+     * Chrome-like input resolver.
+     *
+     * If the input looks like a URL (has a scheme, a TLD, or a "localhost"
+     * style host), it is returned as-is after normalisation. Otherwise the
+     * input is treated as a search query and routed to Google.
+     */
+    fun resolveInput(input: String?): String? {
+        val trimmed = input?.trim().orEmpty()
+        if (trimmed.isEmpty()) return null
+
+        if (schemeRegex.containsMatchIn(trimmed)) {
+            return if (Patterns.WEB_URL.matcher(trimmed).matches()) trimmed else searchUrl(trimmed)
+        }
+
+        val looksLikeDomain = !trimmed.contains(' ') &&
+            trimmed.contains('.') &&
+            trimmed.substringAfterLast('.').length in 2..24 &&
+            trimmed.substringAfterLast('.').all { it.isLetter() }
+
+        val candidate = if (looksLikeDomain) "https://$trimmed" else null
+        if (candidate != null && Patterns.WEB_URL.matcher(candidate).matches()) {
+            return candidate
+        }
+
+        return searchUrl(trimmed)
+    }
+
+    private fun searchUrl(query: String): String {
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        return "https://www.google.com/search?q=$encoded"
+    }
 }
