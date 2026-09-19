@@ -776,7 +776,7 @@ private fun SplashOverlay() {
             verticalArrangement = Arrangement.Center
         ) {
             Image(
-                painter = painterResource(R.mipmap.ic_launcher),
+                painter = painterResource(R.drawable.neura_logo),
                 contentDescription = "Neura Browser",
                 modifier = Modifier
                     .size(140.dp)

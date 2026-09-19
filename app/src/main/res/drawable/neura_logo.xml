@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Rounded square background -->
+    <path
+        android:fillColor="#0A1A3F"
+        android:pathData="M20,4 L88,4 A16,16 0 0 1 104,20 L104,88 A16,16 0 0 1 88,104 L20,104 A16,16 0 0 1 4,88 L4,20 A16,16 0 0 1 20,4 Z" />
+
+    <!-- Diagonal gradient hint -->
+    <path
+        android:fillColor="#1A3A7F"
+        android:pathData="M4,54 L104,4 L104,54 Z" />
+
+    <!-- Connecting lines -->
+    <path
+        android:strokeColor="#4DD0E1"
+        android:strokeWidth="1.8"
+        android:pathData="M32,32 L54,54 M76,32 L54,54 M32,76 L54,54 M76,76 L54,54 M32,32 L32,76 M76,32 L76,76" />
+
+    <!-- Outer nodes -->
+    <path android:fillColor="#4DD0E1" android:pathData="M32,32 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path android:fillColor="#4DD0E1" android:pathData="M76,32 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path android:fillColor="#4DD0E1" android:pathData="M32,76 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path android:fillColor="#4DD0E1" android:pathData="M76,76 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+
+    <!-- Center node -->
+    <path android:fillColor="#FFFFFF" android:pathData="M54,54 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+</vector>
