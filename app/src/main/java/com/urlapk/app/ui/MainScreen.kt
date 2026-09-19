@@ -666,38 +666,59 @@ private fun FloatingControl(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onBack, enabled = canBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        IconButton(onClick = onBack, enabled = canBack, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                        IconButton(onClick = onForward, enabled = canForward) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Forward")
+                        IconButton(onClick = onForward, enabled = canForward, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Forward",
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                        IconButton(onClick = onReload) {
-                            Icon(Icons.Filled.Refresh, contentDescription = "Reload")
+                        IconButton(onClick = onReload, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Filled.Refresh,
+                                contentDescription = "Reload",
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                        IconButton(onClick = onOpenHistory) {
-                            Icon(Icons.Filled.History, contentDescription = "History")
+                        IconButton(onClick = onOpenHistory, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Filled.History,
+                                contentDescription = "History",
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                        Box {
-                            IconButton(onClick = onOpenDownloads) {
-                                Icon(Icons.Filled.Download, contentDescription = "Downloads")
+                        Box(modifier = Modifier.size(36.dp)) {
+                            IconButton(onClick = onOpenDownloads, modifier = Modifier.size(36.dp)) {
+                                Icon(
+                                    Icons.Filled.Download,
+                                    contentDescription = "Downloads",
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                             if (downloadCount > 0) {
                                 Box(
                                     modifier = Modifier
                                         .size(8.dp)
                                         .align(Alignment.TopEnd)
-                                        .padding(top = 6.dp, end = 6.dp)
+                                        .padding(top = 2.dp, end = 2.dp)
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(Color.Red)
                                 )
                             }
                         }
-                        IconButton(onClick = onToggleDesktop) {
+                        IconButton(onClick = onToggleDesktop, modifier = Modifier.size(36.dp)) {
                             Icon(
                                 imageVector = if (isDesktop) Icons.Filled.PhoneAndroid
                                 else Icons.Filled.DesktopWindows,
-                                contentDescription = if (isDesktop) "Mobile site" else "Desktop site"
+                                contentDescription = if (isDesktop) "Mobile site" else "Desktop site",
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }

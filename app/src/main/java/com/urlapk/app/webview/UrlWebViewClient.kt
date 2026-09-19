@@ -8,14 +8,25 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.urlapk.app.util.AdBlocker
+import java.io.ByteArrayInputStream
 
 /**
- * WebViewClient that keeps ALL navigation inside the app
- * (no external browser handoff) and reports page lifecycle
- * to the host via callbacks.
+ * WebViewClient that keeps navigation inside the app and applies the
+ * three-layer ad blocker:
  *
- * Design: website must render exactly as in a normal browser —
- * no URL rewriting, no injected headers, no redirects.
+ *  Layer 1 (request interception):
+ *    shouldInterceptRequest returns an empty body for any resource whose
+ *    host is on the AdBlocker list. The request never leaves the device.
+ *
+ *  Layer 2 (navigation blocking):
+ *    shouldOverrideUrlLoading refuses navigation to ad hosts, which kills
+ *    most ad-click redirects before they take the user away.
+ *
+ *  Layer 3 (cosmetic hiding + JS defense):
+ *    onPageFinished injects CSS to hide leftover ad containers and a small
+ *    JS shim that neutralises window.open() and anchor hijacks pointing
+ *    at known ad domains.
  */
 class UrlWebViewClient(
     private val onPageStarted: (String?) -> Unit,
@@ -27,14 +38,32 @@ class UrlWebViewClient(
         view: WebView,
         request: WebResourceRequest
     ): Boolean {
-        // Keep EVERYTHING inside the WebView. Returning false
-        // lets the WebView load the URL itself (in-app).
-        return false
+        // Block navigation to known ad hosts; allow everything else in-app.
+        return AdBlocker.isAd(request.url?.toString())
     }
 
-    @Deprecated("Kept for API < 24 compatibility (minSdk 24, so unused on modern).")
+    @Deprecated("Kept for API < 24 compatibility.")
     override fun shouldOverrideUrlLoading(view: WebView, url: String?): Boolean {
-        return false
+        return AdBlocker.isAd(url)
+    }
+
+    override fun shouldInterceptRequest(
+        view: WebView,
+        request: WebResourceRequest
+    ): WebResourceResponse? {
+        val url = request.url?.toString()
+        if (AdBlocker.isAd(url)) {
+            // Return an empty 204-style response. The ad resource never loads.
+            return WebResourceResponse(
+                "text/plain",
+                "utf-8",
+                200,
+                "OK",
+                mapOf("Access-Control-Allow-Origin" to "*"),
+                ByteArrayInputStream(ByteArray(0))
+            )
+        }
+        return super.shouldInterceptRequest(view, request)
     }
 
     override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
@@ -44,6 +73,13 @@ class UrlWebViewClient(
 
     override fun onPageFinished(view: WebView, url: String?) {
         super.onPageFinished(view, url)
+
+        // Layer 3: hide leftover ad containers and neutralise popup/click
+        // hijacks. Both scripts are idempotent, so calling them again on
+        // every page finish is safe.
+        view.evaluateJavascript(AdBlocker.injectAdHideCss(), null)
+        view.evaluateJavascript(AdBlocker.injectAdDefense(), null)
+
         onPageFinished(url)
     }
 
@@ -53,7 +89,6 @@ class UrlWebViewClient(
         error: WebResourceError
     ) {
         super.onReceivedError(view, request, error)
-        // Only main-frame errors should show the error screen.
         if (request.isForMainFrame) {
             onPageError(error.errorCode, error.description?.toString())
         }
@@ -75,7 +110,7 @@ class UrlWebViewClient(
         handler: SslErrorHandler,
         error: SslError
     ) {
-        // Security: NEVER proceed on SSL errors. Cancel.
+        // Security: never proceed on SSL errors.
         handler.cancel()
         onPageError(-1, "SSL error: ${error.primaryError}")
     }
